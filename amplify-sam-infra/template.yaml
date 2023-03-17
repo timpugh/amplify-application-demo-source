@@ -80,8 +80,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/hello_world/
-      Handler: handler.handler
-      Runtime: nodejs12.x
+      Handler: hello_world.lambda_handler
+      Runtime: python3.9
       Events:
         HelloAPI:
           Type: Api
