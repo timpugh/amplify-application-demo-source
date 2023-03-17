@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  GithubRepository:
+    Type: String
+    Description: GitHub repository URL
+  Stage:
+    Type: String
+    Description: Deployment stage
+
+Resources:
+
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: amplify-sam-demo-app
+      Repository:
+        Ref: GithubRepository
+      AccessToken: '{{resolve:secretsmanager:github-token}}'
+      IAMServiceRole:
+        Fn::GetAtt:
+        - AmplifyRole
+        - Arn
+      EnvironmentVariables:
+      - Name: ENDPOINT
+        Value:
+          Fn::Sub: https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/
+    Metadata:
+      SamResourceId: AmplifyApp
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      BranchName: main
+      AppId:
+        Fn::GetAtt:
+        - AmplifyApp
+        - AppId
+      EnableAutoBuild: true
+    Metadata:
+      SamResourceId: AmplifyBranch
+
+  AmplifyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - amplify.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: Amplify
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action: amplify:*
+            Resource: '*'
+    Metadata:
+      SamResourceId: AmplifyRole
+
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: Stage
+      Cors:
+        AllowMethods: '''*'''
+        AllowHeaders: '''*'''
+        AllowOrigin: '''*'''
+    Metadata:
+      SamResourceId: MyApi
+
+  MyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/hello_world/
+      Handler: handler.handler
+      Runtime: nodejs12.x
+      Events:
+        HelloAPI:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /hello
+            Method: GET
+    Metadata:
+      SamResourceId: MyFunction
+
+Outputs:
+  OrderApi:
+    Description: API Gateway endpoint URL for Prod stage for Order function
+    Value:
+      Fn::Sub: https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/hello/
