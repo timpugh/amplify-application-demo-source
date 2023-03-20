@@ -64,15 +64,121 @@ Resources:
     Metadata:
       SamResourceId: AmplifyRole
 
+  ApiCWLRoleArn:
+    Type: AWS::ApiGateway::Account
+    Properties: 
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+# IAM Role for API GW + CWL
+  CloudWatchRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+        Path: /
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+
   MyApi:
     Type: AWS::Serverless::Api
+    DependsOn: ApiCWLRoleArn
     Properties:
-      StageName:
-        Ref: Stage
-      Cors:
-        AllowMethods: '''*'''
-        AllowHeaders: '''*'''
-        AllowOrigin: '''*'''
+      Name:
+        Fn::Join:
+          - '-'
+          - - "lambdaLoadTester"
+            - Ref: Stage
+      OpenApiVersion: '3.0.1'
+      EndpointConfiguration: EDGE
+      AccessLogSetting:
+        DestinationArn: !GetAtt AccessLogGroup.Arn
+        Format:
+          ' {    "accountId": "$context.accountId",    "apiId": "$context.apiId",    "stage": "$context.stage",    "resourcePath": "$context.resourcePath",    "httpMethod": "$context.httpMethod",    "protocol": "$context.protocol",    "status": "$context.status",    "responseType": "$context.error.responseType",    "error.message": "$context.error.message",    "requestTime": "$context.requestTime",    "requestId": "$context.requestId",    "ip": "$context.identity.sourceIp",    "caller": "$context.identity.caller",    "user": "$context.identity.user",    "responseLength": "$context.responseLength"}'
+      StageName: !Ref Stage
+      MethodSettings:    
+        - DataTraceEnabled: true
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          MetricsEnabled: true
+          ResourcePath: '/*'
+          ThrottlingBurstLimit: 5000
+          ThrottlingRateLimit: 10000
+      TracingEnabled: true
+      DefinitionBody:
+        openapi: '3.0.1'
+        paths:
+          /hello:
+            get:
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: "string"
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/Empty"
+              x-amazon-apigateway-integration:
+                type: AWS
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyFunction.Arn}/invocations
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                    responseTemplates:
+                      application/json: "{\"statusCode\": 200,\"body\": \"Go ahead without me.\"}"
+                requestParameters:
+                  integration.request.header.x-Amz-Invocation-Type: '''Event'''
+                passthroughBehavior: "when_no_match"
+                contentHandling: "CONVERT_TO_TEXT"
+            options:
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: "string"
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: "string"
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: "string"
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/Empty"
+              x-amazon-apigateway-integration:
+                type: "mock"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                passthroughBehavior: "when_no_match"
+        components:
+          schemas:
+            Empty:
+              title: "Empty Schema"
+              type: "object"
     Metadata:
       SamResourceId: MyApi
 

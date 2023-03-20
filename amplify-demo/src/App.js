@@ -24,7 +24,10 @@ function App() {
     <div className="App">
       <header className="App-header">
         <h1>CALL AN API</h1>
-        <button onClick={getApiMessage}>Call Lambda</button>
+        <button onClick={getApiMessage}>Call Kinesis Producer</button>
+        <button onClick={getApiMessage}>Call DynamoDB Producer</button>
+        <button onClick={getApiMessage}>Call SNS Producer</button>
+        <button onClick={getApiMessage}>Call SQS Producer</button>
         <div>
           {showResult && <code>{JSON.stringify(apiMessage, null, 2)}</code>}
         </div>
